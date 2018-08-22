@@ -61,13 +61,15 @@ Cpu *Cpu_create(Ram *ram, uint16_t pc)
 
 int Cpu_step(Cpu *self)
 {
+    int rc = 0;
     uint8_t op = Ram_get(self->ram, self->pc++);
-    if (self->pc >= Ram_size(self->ram)) return -1;
+    if (self->pc >= Ram_size(self->ram)) rc = -1;
 
     if ((op & O_AM_IMPLICIT) == O_AM_IMPLICIT)
     {
         if ((op & O_AM_JUMP) == O_AM_JUMP)
         {
+            if (rc) return rc;
             uint16_t target;
             uint8_t arg1 = Ram_get(self->ram, self->pc++);
             if (op & O_AM_ABSOLUTE)
@@ -86,7 +88,6 @@ int Cpu_step(Cpu *self)
             switch (op & 0xfe)
             {
                 case O_BSR:
-                    if (self->pc >= Ram_size(self->ram)) return -1;
                     if (self->sp == 256) return -1;
                     self->stack[self->sp++] = self->pc & 0xff;
                     if (self->sp == 256) return -1;
@@ -117,6 +118,7 @@ int Cpu_step(Cpu *self)
             }
             if (dojump)
             {
+                rc = 0;
                 if (target >= Ram_size(self->ram)) return -1;
                 self->pc = target;
             }
@@ -130,6 +132,7 @@ int Cpu_step(Cpu *self)
                     self->pc = self->stack[--self->sp] << 8;
                     if (self->sp == 0) return -1;
                     self->pc |= self->stack[--self->sp];
+                    if (self->pc >= Ram_size(self->ram)) return -1;
                     break;
                 case O_SRA:
                     SR(self->regs[CR_A]);
@@ -223,51 +226,52 @@ int Cpu_step(Cpu *self)
     {
         uint8_t arg1, arg2, v;
         uint16_t addr, ind;
+        if (rc) return rc;
         switch (op & 7)
         {
             case O_AM_IMMEDIATE:
                 addr = self->pc++;
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 break;
             case O_AM_ABSOLUTE:
                 arg1 = Ram_get(self->ram, self->pc++);
                 if (self->pc >= Ram_size(self->ram)) return -1;
                 arg2 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = arg2 << 8 | arg1;
                 break;
             case O_AM_ZP_ABS:
                 arg1 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = arg1;
                 break;
             case O_AM_IDX_X:
                 arg1 = Ram_get(self->ram, self->pc++);
                 if (self->pc >= Ram_size(self->ram)) return -1;
                 arg2 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = (arg2 << 8 | arg1) + self->regs[CR_X];
                 break;
             case O_AM_ZP_IDX_X:
                 arg1 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = arg1 + self->regs[CR_X];
                 break;
             case O_AM_IDX_Y:
                 arg1 = Ram_get(self->ram, self->pc++);
                 if (self->pc >= Ram_size(self->ram)) return -1;
                 arg2 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = (arg2 << 8 | arg1) + self->regs[CR_Y];
                 break;
             case O_AM_ZP_IDX_Y:
                 arg1 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = arg1 + self->regs[CR_Y];
                 break;
             case O_AM_ZP_IND_Y:
                 arg1 = Ram_get(self->ram, self->pc++);
-                if (self->pc >= Ram_size(self->ram)) return -1;
+                if (self->pc >= Ram_size(self->ram)) rc = -1;
                 if (arg1 + 1 > Ram_size(self->ram)) return -1;
                 ind = Ram_get(self->ram, arg1) |
                     Ram_get(self->ram, arg1 + 1) << 8;
@@ -377,7 +381,7 @@ int Cpu_step(Cpu *self)
                 return -1;
         }
     }
-    return 0;
+    return rc;
 }
 
 uint16_t Cpu_pc(const Cpu *self)
