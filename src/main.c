@@ -5,41 +5,37 @@
 #include "ram.h"
 #include "cpu.h"
 
-static uint8_t input[0x10000];
-
 int main(int argc, char **argv)
 {
     uint16_t start = 0;
-    uint16_t size = 0;
-    if (argc > 1) start = atoi(argv[1]);
     int rc = 0;
-    int ok = 0;
     unsigned val;
+    
+    if (argc > 1) start = atoi(argv[1]);
+    Ram *ram = Ram_create(0,0);
+    if (!ram) return EXIT_FAILURE;
+
     while ((rc = scanf("%x", &val)) > 0)
     {
         if (val > 0xff)
         {
             fputs("parse error!\n", stderr);
+            Ram_destroy(ram);
             return EXIT_FAILURE;
         }
-        if (ok && !size)
+        if (Ram_appendByte(ram, val) < 0)
         {
-            fputs("input too large!\n", stderr);
+            fputs("loading error (input too large?)\n", stderr);
+            Ram_destroy(ram);
             return EXIT_FAILURE;
         }
-        ok = 1;
-        input[size++] =  val;
     }
     if (!rc)
     {
         fputs("parse error!\n", stderr);
+        Ram_destroy(ram);
         return EXIT_FAILURE;
     }
-
-    Ram *ram = Ram_create(size);
-    if (!ram) return EXIT_FAILURE;
-
-    Ram_load(ram, 0, input, size);
 
     Cpu *cpu = Cpu_create(ram, start);
     if (!cpu)
@@ -61,7 +57,7 @@ int main(int argc, char **argv)
     } while (Cpu_step(cpu) >= 0);
 
     int x = 0;
-    for (unsigned i = 0; i < (size ? size : 0x10000); ++i)
+    for (size_t i = 0; i < Ram_size(ram); ++i)
     {
         printf("%02x ", Ram_get(ram, i));
         if (++x == 26)
@@ -71,5 +67,7 @@ int main(int argc, char **argv)
         }
     }
 
+    Cpu_destroy(cpu);
+    Ram_destroy(ram);
     return EXIT_SUCCESS;
 }

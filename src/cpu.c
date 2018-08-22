@@ -272,7 +272,7 @@ int Cpu_step(Cpu *self)
             case O_AM_ZP_IND_Y:
                 arg1 = Ram_get(self->ram, self->pc++);
                 if (self->pc >= Ram_size(self->ram)) rc = -1;
-                if (arg1 + 1 > Ram_size(self->ram)) return -1;
+                if ((size_t)arg1 + 1 > Ram_size(self->ram)) return -1;
                 ind = Ram_get(self->ram, arg1) |
                     Ram_get(self->ram, arg1 + 1) << 8;
                 addr = ind + self->regs[CR_Y];
