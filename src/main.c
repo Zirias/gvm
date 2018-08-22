@@ -44,7 +44,8 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    do
+    rc = 0;
+    while (rc >= 0)
     {
         CpuFlags f = Cpu_flags(cpu);
         fprintf(stderr, "PC:%04x - A:%02x X:%02x Y:%02x - [ %c %c %c ]\n",
@@ -53,8 +54,13 @@ int main(int argc, char **argv)
                 f & CF_ZERO ? 'Z' : '_',
                 f & CF_NEGATIVE ? 'N' : '_',
                 f & CF_CARRY ? 'C' : '_');
+        char dis[32];
+        rc = Cpu_step(cpu, dis);
+        fprintf(stderr, "%s\n", dis);
         fflush(stderr);
-    } while (Cpu_step(cpu) >= 0);
+    }
+    fputs("=== terminated ===\n", stderr);
+    fflush(stderr);
 
     int x = 0;
     for (size_t i = 0; i < Ram_size(ram); ++i)
