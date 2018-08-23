@@ -13,14 +13,13 @@ typedef enum CpuFlags
 typedef enum CpuReg
 {
     CR_A,
-    CR_X,
-    CR_Y
+    CR_X
 } CpuReg;
 
 typedef struct Cpu Cpu;
 typedef struct Ram Ram;
 
-Cpu *Cpu_create(Ram *ram, uint16_t pc);
+Cpu *Cpu_create(Ram *ram, uint8_t pc);
 int Cpu_step(Cpu *self, char *dis);
 uint16_t Cpu_pc(const Cpu *self);
 CpuFlags Cpu_flags(const Cpu *self);

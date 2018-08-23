@@ -48,9 +48,9 @@ int main(int argc, char **argv)
     while (rc >= 0)
     {
         CpuFlags f = Cpu_flags(cpu);
-        fprintf(stderr, "PC:%04x - A:%02x X:%02x Y:%02x - [ %c %c %c ]\n",
+        fprintf(stderr, "PC:%04x - A:%02x X:%02x - [ %c %c %c ]\n",
                 Cpu_pc(cpu), Cpu_reg(cpu, CR_A),
-                Cpu_reg(cpu, CR_X), Cpu_reg(cpu, CR_Y),
+                Cpu_reg(cpu, CR_X),
                 f & CF_ZERO ? 'Z' : '_',
                 f & CF_NEGATIVE ? 'N' : '_',
                 f & CF_CARRY ? 'C' : '_');

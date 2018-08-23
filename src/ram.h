@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define RAM_MAXSIZE 0x10000
+#define RAM_MAXSIZE 0x100
 
 typedef struct Ram Ram;
 

@@ -11,20 +11,17 @@ struct Cpu
 {
     Ram *ram;
     CpuFlags flags;
-    uint16_t pc;
-    uint16_t sp;
-    uint8_t stack[256];
-    uint8_t regs[3];
+    uint8_t pc;
+    uint8_t regs[2];
 };
 
-Cpu *Cpu_create(Ram *ram, uint16_t pc)
+Cpu *Cpu_create(Ram *ram, uint8_t pc)
 {
     if (pc >= Ram_size(ram)) return 0;
     Cpu *self = malloc(sizeof *self);
     self->ram = ram;
     self->pc = pc;
     self->flags = 0;
-    self->sp = 0;
     return self;
 }
 
@@ -79,17 +76,6 @@ static void logInst(char *dis, const char *inst)
     }
 }
 
-static void logAbs(char *dis, uint16_t addr, char *index)
-{
-    char buf[8];
-    if (dis)
-    {
-        sprintf(buf, "$%04x", addr);
-        if (index) strcat(buf, index);
-        memcpy(dis+16, buf, strlen(buf));
-    }
-}
-
 static void logRel(char *dis, int8_t off)
 {
     char buf[5];
@@ -121,16 +107,6 @@ static void logZp(char *dis, uint8_t addr, char *index)
     }
 }
 
-static void logZpInd(char *dis, uint8_t addr)
-{
-    char buf[8];
-    if (dis)
-    {
-        sprintf(buf, "($%02x),Y", addr);
-        memcpy(dis+16, buf, 7);
-    }
-}
-
 static void logRes(char *dis, uint8_t res)
 {
     char buf[6];
@@ -157,13 +133,10 @@ int Cpu_step(Cpu *self, char *dis)
             uint16_t target;
             uint8_t arg1 = Ram_get(self->ram, self->pc++);
             logByte(dis, 3, arg1);
-            if (op & O_AM_ABSOLUTE)
+            if (op & 1)
             {
-                if (self->pc >= Ram_size(self->ram)) return -1;
-                uint8_t arg2 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 6, arg2);
-                target = arg2 << 8 | arg1;
-                logAbs(dis, target, 0);
+                logInst(dis, "ILL");
+                return -1;
             }
             else
             {
@@ -175,13 +148,6 @@ int Cpu_step(Cpu *self, char *dis)
             int dojump = 1;
             switch (op & 0xfe)
             {
-                case O_BSR:
-                    logInst(dis, "BSR");
-                    if (self->sp == 256) return -1;
-                    self->stack[self->sp++] = self->pc & 0xff;
-                    if (self->sp == 256) return -1;
-                    self->stack[self->sp++] = self->pc >> 8;
-                    break;
                 case O_BRA:
                     logInst(dis, "BRA");
                     break;
@@ -224,44 +190,6 @@ int Cpu_step(Cpu *self, char *dis)
         {
             switch (op)
             {
-                case O_RTS:
-                    logInst(dis, "RTS");
-                    if (self->sp == 0) return -1;
-                    self->pc = self->stack[--self->sp] << 8;
-                    if (self->sp == 0) return -1;
-                    self->pc |= self->stack[--self->sp];
-                    if (self->pc >= Ram_size(self->ram)) return -1;
-                    break;
-                case O_SRA:
-                    logInst(dis, "SRA");
-                    SR(self->regs[CR_A]);
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_SLA:
-                    logInst(dis, "SLA");
-                    SL(self->regs[CR_A]);
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_RRA:
-                    logInst(dis, "RRA");
-                    RR(self->regs[CR_A]);
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_RLA:
-                    logInst(dis, "RLA");
-                    RL(self->regs[CR_A]);
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_INA:
-                    logInst(dis, "INA");
-                    ++self->regs[CR_A];
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_DEA:
-                    logInst(dis, "DEA");
-                    --self->regs[CR_A];
-                    NZ(self->regs[CR_A]);
-                    break;
                 case O_INX:
                     logInst(dis, "INX");
                     ++self->regs[CR_X];
@@ -272,32 +200,6 @@ int Cpu_step(Cpu *self, char *dis)
                     --self->regs[CR_X];
                     NZ(self->regs[CR_X]);
                     break;
-                case O_INY:
-                    logInst(dis, "INY");
-                    ++self->regs[CR_Y];
-                    NZ(self->regs[CR_Y]);
-                    break;
-                case O_DEY:
-                    logInst(dis, "DEY");
-                    --self->regs[CR_Y];
-                    NZ(self->regs[CR_Y]);
-                    break;
-                case O_SEZ:
-                    logInst(dis, "SEZ");
-                    self->flags |= CF_ZERO;
-                    break;
-                case O_CLZ:
-                    logInst(dis, "CLZ");
-                    self->flags &= ~CF_ZERO;
-                    break;
-                case O_SEN:
-                    logInst(dis, "SEN");
-                    self->flags |= CF_NEGATIVE;
-                    break;
-                case O_CLN:
-                    logInst(dis, "CLN");
-                    self->flags &= ~CF_NEGATIVE;
-                    break;
                 case O_SEC:
                     logInst(dis, "SEC");
                     self->flags |= CF_CARRY;
@@ -305,36 +207,6 @@ int Cpu_step(Cpu *self, char *dis)
                 case O_CLC:
                     logInst(dis, "CLC");
                     self->flags &= ~CF_CARRY;
-                    break;
-                case O_TAX:
-                    logInst(dis, "TAX");
-                    self->regs[CR_X] = self->regs[CR_A];
-                    NZ(self->regs[CR_X]);
-                    break;
-                case O_TXA:
-                    logInst(dis, "TXA");
-                    self->regs[CR_A] = self->regs[CR_X];
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_TAY:
-                    logInst(dis, "TAY");
-                    self->regs[CR_Y] = self->regs[CR_A];
-                    NZ(self->regs[CR_Y]);
-                    break;
-                case O_TYA:
-                    logInst(dis, "TYA");
-                    self->regs[CR_A] = self->regs[CR_Y];
-                    NZ(self->regs[CR_A]);
-                    break;
-                case O_TXY:
-                    logInst(dis, "TXY");
-                    self->regs[CR_Y] = self->regs[CR_X];
-                    NZ(self->regs[CR_Y]);
-                    break;
-                case O_TYX:
-                    logInst(dis, "TYX");
-                    self->regs[CR_X] = self->regs[CR_Y];
-                    NZ(self->regs[CR_X]);
                     break;
                 case O_HLT:
                     logInst(dis, "HLT");
@@ -347,8 +219,8 @@ int Cpu_step(Cpu *self, char *dis)
     }
     else
     {
-        uint8_t arg1, arg2, v;
-        uint16_t addr, ind;
+        uint8_t arg1, v;
+        uint16_t addr;
         int carry;
         if (rc) return rc;
         switch (op & 7)
@@ -360,32 +232,12 @@ int Cpu_step(Cpu *self, char *dis)
                 addr = self->pc++;
                 if (self->pc >= Ram_size(self->ram)) rc = -1;
                 break;
-            case O_AM_ABSOLUTE:
-                arg1 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 3, arg1);
-                if (self->pc >= Ram_size(self->ram)) return -1;
-                arg2 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 6, arg2);
-                if (self->pc >= Ram_size(self->ram)) rc = -1;
-                addr = arg2 << 8 | arg1;
-                logAbs(dis, addr, 0);
-                break;
             case O_AM_ZP_ABS:
                 arg1 = Ram_get(self->ram, self->pc++);
                 logByte(dis, 3, arg1);
                 if (self->pc >= Ram_size(self->ram)) rc = -1;
                 addr = arg1;
                 logZp(dis, arg1, 0);
-                break;
-            case O_AM_IDX_X:
-                arg1 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 3, arg1);
-                if (self->pc >= Ram_size(self->ram)) return -1;
-                arg2 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 6, arg2);
-                if (self->pc >= Ram_size(self->ram)) rc = -1;
-                addr = (arg2 << 8 | arg1) + self->regs[CR_X];
-                logAbs(dis, (arg2 << 8 | arg1), ",X");
                 break;
             case O_AM_ZP_IDX_X:
                 arg1 = Ram_get(self->ram, self->pc++);
@@ -394,33 +246,9 @@ int Cpu_step(Cpu *self, char *dis)
                 addr = arg1 + self->regs[CR_X];
                 logZp(dis, arg1, ",X");
                 break;
-            case O_AM_IDX_Y:
-                arg1 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 3, arg1);
-                if (self->pc >= Ram_size(self->ram)) return -1;
-                arg2 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 6, arg2);
-                if (self->pc >= Ram_size(self->ram)) rc = -1;
-                addr = (arg2 << 8 | arg1) + self->regs[CR_Y];
-                logAbs(dis, (arg2 << 8 | arg1), ",Y");
-                break;
-            case O_AM_ZP_IDX_Y:
-                arg1 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 3, arg1);
-                if (self->pc >= Ram_size(self->ram)) rc = -1;
-                addr = arg1 + self->regs[CR_Y];
-                logZp(dis, arg1, ",Y");
-                break;
-            case O_AM_ZP_IND_Y:
-                arg1 = Ram_get(self->ram, self->pc++);
-                logByte(dis, 3, arg1);
-                logZpInd(dis, arg1);
-                if (self->pc >= Ram_size(self->ram)) rc = -1;
-                if ((size_t)arg1 + 1 > Ram_size(self->ram)) return -1;
-                ind = Ram_get(self->ram, arg1) |
-                    Ram_get(self->ram, arg1 + 1) << 8;
-                addr = ind + self->regs[CR_Y];
-                break;
+            default:
+                logInst(dis, "ILL");
+                return -1;
         }
         if (addr > Ram_size(self->ram)) return -1;
         v = Ram_get(self->ram, addr);
@@ -443,15 +271,6 @@ int Cpu_step(Cpu *self, char *dis)
             case O_STX:
                 logInst(dis, "STX");
                 Ram_set(self->ram, addr, self->regs[CR_X]);
-                break;
-            case O_LDY:
-                logInst(dis, "LDY");
-                self->regs[CR_Y] = v;
-                NZ(self->regs[CR_Y]);
-                break;
-            case O_STY:
-                logInst(dis, "STY");
-                Ram_set(self->ram, addr, self->regs[CR_Y]);
                 break;
             case O_AND:
                 logInst(dis, "AND");
@@ -508,18 +327,6 @@ int Cpu_step(Cpu *self, char *dis)
                 }
                 NZ(self->regs[CR_A]);
                 break;
-            case O_SBC:
-                logInst(dis, "SBC");
-                carry = self->flags & CF_CARRY;
-                self->regs[CR_A] -= v;
-                if (self->regs[CR_A] <= v) self->flags |= CF_CARRY;
-                else self->flags &= ~CF_CARRY;
-                if (!carry)
-                {
-                    if (!self->regs[CR_A]--) self->flags &= ~CF_CARRY;
-                }
-                NZ(self->regs[CR_A]);
-                break;
             case O_INC:
                 logInst(dis, "INC");
                 ++v;
@@ -545,13 +352,6 @@ int Cpu_step(Cpu *self, char *dis)
                 logInst(dis, "CPX");
                 v = self->regs[CR_X] - v;
                 if (v < self->regs[CR_X]) self->flags |= CF_CARRY;
-                else self->flags &= ~CF_CARRY;
-                NZ(v);
-                break;
-            case O_CPY:
-                logInst(dis, "CPY");
-                v = self->regs[CR_Y] - v;
-                if (v < self->regs[CR_Y]) self->flags |= CF_CARRY;
                 else self->flags &= ~CF_CARRY;
                 NZ(v);
                 break;

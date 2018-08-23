@@ -4,7 +4,7 @@
 
 #include "ram.h"
 
-#define RAM_PAGESIZE 0x1000
+#define RAM_PAGESIZE 0x100
 
 struct Ram
 {
@@ -83,6 +83,7 @@ int Ram_set(Ram *self, uint16_t at, uint8_t byte)
 {
     if (at >= self->size) return -1;
     self->m[at] = byte;
+    return 0;
 }
 
 uint8_t Ram_get(const Ram *self, uint16_t at)
