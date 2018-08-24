@@ -2,66 +2,25 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef BUILTIN_GETOPT
+#include "builtin_getopt.h"
+#else
+#include <unistd.h>
+#endif
+
 #include "ram.h"
 #include "cpu.h"
+#include "converter.h"
 
-int main(int argc, char **argv)
+typedef enum dump
 {
-    uint16_t start = 0;
-    int rc = 0;
-    unsigned val;
-    
-    if (argc > 1) start = atoi(argv[1]);
-    Ram *ram = Ram_create(0,0);
-    if (!ram) return EXIT_FAILURE;
+    D_NONE,
+    D_BIN,
+    D_HEX
+} dump;
 
-    while ((rc = scanf("%x", &val)) > 0)
-    {
-        if (val > 0xff)
-        {
-            fputs("parse error!\n", stderr);
-            Ram_destroy(ram);
-            return EXIT_FAILURE;
-        }
-        if (Ram_appendByte(ram, val) < 0)
-        {
-            fputs("loading error (input too large?)\n", stderr);
-            Ram_destroy(ram);
-            return EXIT_FAILURE;
-        }
-    }
-    if (!rc)
-    {
-        fputs("parse error!\n", stderr);
-        Ram_destroy(ram);
-        return EXIT_FAILURE;
-    }
-
-    Cpu *cpu = Cpu_create(ram, start);
-    if (!cpu)
-    {
-        Ram_destroy(ram);
-        return EXIT_FAILURE;
-    }
-
-    rc = 0;
-    while (rc >= 0)
-    {
-        CpuFlags f = Cpu_flags(cpu);
-        fprintf(stderr, "PC:%04x - A:%02x X:%02x - [ %c %c %c ]\n",
-                Cpu_pc(cpu), Cpu_reg(cpu, CR_A),
-                Cpu_reg(cpu, CR_X),
-                f & CF_ZERO ? 'Z' : '_',
-                f & CF_NEGATIVE ? 'N' : '_',
-                f & CF_CARRY ? 'C' : '_');
-        char dis[32];
-        rc = Cpu_step(cpu, dis);
-        fprintf(stderr, "%s\n", dis);
-        fflush(stderr);
-    }
-    fputs("=== terminated ===\n", stderr);
-    fflush(stderr);
-
+static void dumpRamHex(const Ram *ram)
+{
     int x = 0;
     for (size_t i = 0; i < Ram_size(ram); ++i)
     {
@@ -72,8 +31,196 @@ int main(int argc, char **argv)
             puts("");
         }
     }
+    puts("");
+    fflush(stdout);
+}
 
+static void dumpRam(const Ram *ram)
+{
+    for (size_t i = 0; i < Ram_size(ram); ++i)
+    {
+        putchar(Ram_get(ram, i));
+    }
+    fflush(stdout);
+}
+
+static Ram *createXram(int hex)
+{
+    Ram *ram = Ram_create(0,0);
+    if (!ram) return 0;
+
+    if (hex)
+    {
+        unsigned val;
+        int rc;
+        while ((rc = scanf("%x", &val)) > 0)
+        {
+            if (val > 0xff)
+            {
+                fputs("parse error!\n", stderr);
+                Ram_destroy(ram);
+                return 0;
+            }
+            if (Ram_appendByte(ram, val) < 0)
+            {
+                fputs("loading error (input too large?)\n", stderr);
+                Ram_destroy(ram);
+                return 0;
+            }
+        }
+        if (!rc)
+        {
+            fputs("parse error!\n", stderr);
+            Ram_destroy(ram);
+            return 0;
+        }
+    }
+    else
+    {
+        uint8_t buf[0x1000];
+        size_t sz;
+        while ((sz = fread(buf, 1, 0x1000, stdin)))
+        {
+            if (Ram_append(ram, buf, sz) < 0)
+            {
+                fputs("loading error (input too large?)\n", stderr);
+                Ram_destroy(ram);
+                return 0;
+            }
+        }
+        if (!feof(stdin))
+        {
+            fputs("unknown loading error\n", stderr);
+            Ram_destroy(ram);
+            return 0;
+        }
+    }
+
+    return ram;
+}
+
+int main(int argc, char **argv)
+{
+    dump d = D_NONE;
+    uint16_t start = 0;
+    int trace = 0;
+    int hex = 0;
+    FILE *convtable = 0;
+    int opt;
+
+    Ram *ram = 0;
+    Converter *converter = 0;
+    Cpu *cpu = 0;
+
+    if (!argv[0]) argv[0] = "gvm";
+    while ((opt = getopt(argc, argv, "s:htc:dx")) != -1)
+    {
+        switch (opt)
+        {
+            case 's':
+                start = atoi(optarg);
+                break;
+            case 't':
+                trace = 1;
+                break;
+            case 'h':
+                hex = 1;
+                break;
+            case 'c':
+                if (convtable) goto usage;
+                convtable = fopen(optarg, "r");
+                if (!convtable)
+                {
+                    fprintf(stderr, "Error opening %s for reading.\n", optarg);
+                    return EXIT_FAILURE;
+                }
+                break;
+            case 'd':
+                d = D_BIN;
+                break;
+            case 'x':
+                d = D_HEX;
+                break;
+            default:
+                goto usage;
+        }
+    }
+    if (optind < argc) goto usage;
+
+    ram = createXram(hex);
+    if (!ram) goto error;
+
+    if (convtable)
+    {
+        converter = Converter_create(ram);
+        if (!converter) goto error;
+        if (Converter_readTable(converter, convtable) < 0)
+        {
+            fputs("Error reading conversion table.\n", stderr);
+            goto error;
+        }
+        fclose(convtable);
+        convtable = 0;
+    }
+
+    cpu = Cpu_create(ram, start, converter);
+    if (!cpu) goto error;
+
+    int rc = 0;
+    while (rc >= 0)
+    {
+        if (trace)
+        {
+            CpuFlags f = Cpu_flags(cpu);
+            fprintf(stderr, "PC:%04x - A:%02x X:%02x - [ %c %c %c ]\n",
+                    Cpu_pc(cpu), Cpu_reg(cpu, CR_A),
+                    Cpu_reg(cpu, CR_X),
+                    f & CF_ZERO ? 'Z' : '_',
+                    f & CF_NEGATIVE ? 'N' : '_',
+                    f & CF_CARRY ? 'C' : '_');
+            char dis[32];
+            rc = Cpu_step(cpu, dis);
+            fprintf(stderr, "%s\n", dis);
+            fflush(stderr);
+        }
+        else rc = Cpu_step(cpu, 0);
+    }
+    if (trace)
+    {
+        fputs("=== terminated ===\n", stderr);
+        fflush(stderr);
+    }
+
+    if (d)
+    {
+        if (d == D_HEX) dumpRamHex(ram);
+        else dumpRam(ram);
+    }
+
+    if (converter)
+    {
+        puts("Converted input:");
+        dumpRamHex(Converter_input(converter));
+        puts("Converted output:");
+        dumpRamHex(Converter_output(converter));
+    }
+
+    if (convtable) fclose(convtable);
+    Converter_destroy(converter);
     Cpu_destroy(cpu);
     Ram_destroy(ram);
     return EXIT_SUCCESS;
+
+error:
+    if (convtable) fclose(convtable);
+    Converter_destroy(converter);
+    Cpu_destroy(cpu);
+    Ram_destroy(ram);
+    return EXIT_FAILURE;
+
+usage:
+    if (convtable) fclose(convtable);
+    fprintf(stderr, "Usage: %s [-s startpc] [-h] [-t] [-c convfile] "
+            "[-d] [-x]\n", argv[0]);
+    return EXIT_FAILURE;
 }

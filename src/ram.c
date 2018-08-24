@@ -41,6 +41,25 @@ Ram *Ram_create(size_t size, const uint8_t *content)
     return self;
 }
 
+Ram *Ram_clone(const Ram *from)
+{
+    Ram *clone = malloc(sizeof *clone);
+    if (!clone) return 0;
+    memcpy(clone, from, sizeof *clone);
+    if (clone->m)
+    {
+        uint8_t *cm = malloc(clone->capa);
+        if (!cm)
+        {
+            free(clone);
+            return 0;
+        }
+        memcpy(cm, clone->m, clone->capa);
+        clone->m = cm;
+    }
+    return clone;
+}
+
 int Ram_load(Ram *self, uint16_t at, const uint8_t *data, size_t size)
 {
     if (size > self->size || size + at > self->size) return -1;
