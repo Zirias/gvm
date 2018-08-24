@@ -1,4 +1,4 @@
-gvm_MODULES:= main cpu ram
+gvm_MODULES:= main cpu ram converter
 ifeq ($(PLATFORM),win32)
 gvm_MODULES+= builtin_getopt
 gvm_DEFINES+= -DBUILTIN_GETOPT

@@ -8,6 +8,7 @@
 typedef struct Ram Ram;
 
 Ram *Ram_create(size_t size, const uint8_t *content);
+Ram *Ram_clone(const Ram *from);
 int Ram_load(Ram *self, uint16_t at, const uint8_t *data, size_t size);
 int Ram_appendByte(Ram *self, uint8_t byte);
 int Ram_append(Ram *self, const uint8_t *data, size_t size);

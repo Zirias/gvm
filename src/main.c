@@ -10,6 +10,7 @@
 
 #include "ram.h"
 #include "cpu.h"
+#include "converter.h"
 
 typedef enum mode
 {
@@ -23,6 +24,31 @@ typedef enum dump
     D_BIN,
     D_HEX
 } dump;
+
+static void dumpRamHex(const Ram *ram)
+{
+    int x = 0;
+    for (size_t i = 0; i < Ram_size(ram); ++i)
+    {
+        printf("%02x ", Ram_get(ram, i));
+        if (++x == 26)
+        {
+            x = 0;
+            puts("");
+        }
+    }
+    puts("");
+    fflush(stdout);
+}
+
+static void dumpRam(const Ram *ram)
+{
+    for (size_t i = 0; i < Ram_size(ram); ++i)
+    {
+        putchar(Ram_get(ram, i));
+    }
+    fflush(stdout);
+}
 
 static Ram *createXcode(int hex, uint16_t load)
 {
@@ -153,8 +179,12 @@ int main(int argc, char **argv)
     int userstart = 0;
     int trace = 0;
     int hex = 0;
-    char *convert = 0;
+    FILE *convtable = 0;
     int opt;
+
+    Ram *ram = 0;
+    Converter *converter = 0;
+    Cpu *cpu = 0;
 
     if (!argv[0]) argv[0] = "gvm";
     while ((opt = getopt(argc, argv, "rs:htc:dx")) != -1)
@@ -176,7 +206,13 @@ int main(int argc, char **argv)
                 hex = 1;
                 break;
             case 'c':
-                convert = optarg;
+                if (convtable) goto usage;
+                convtable = fopen(optarg, "r");
+                if (!convtable)
+                {
+                    fprintf(stderr, "Error opening %s for reading.\n", optarg);
+                    return EXIT_FAILURE;
+                }
                 break;
             case 'd':
                 d = D_BIN;
@@ -190,7 +226,6 @@ int main(int argc, char **argv)
     }
     if (optind < argc) goto usage;
 
-    Ram *ram = 0;
     if (m == M_XRAM)
     {
         ram = createXram(hex);
@@ -199,14 +234,23 @@ int main(int argc, char **argv)
     {
         ram = createXcode(hex, start);
     }
-    if (!ram) return EXIT_FAILURE;
+    if (!ram) goto error;
 
-    Cpu *cpu = Cpu_create(ram, start);
-    if (!cpu)
+    if (convtable)
     {
-        Ram_destroy(ram);
-        return EXIT_FAILURE;
+        converter = Converter_create(ram);
+        if (!converter) goto error;
+        if (Converter_readTable(converter, convtable) < 0)
+        {
+            fputs("Error reading conversion table.\n", stderr);
+            goto error;
+        }
+        fclose(convtable);
+        convtable = 0;
     }
+
+    cpu = Cpu_create(ram, start, converter);
+    if (!cpu) goto error;
 
     int rc = 0;
     while (rc >= 0)
@@ -235,31 +279,33 @@ int main(int argc, char **argv)
 
     if (d)
     {
-        int x = 0;
-        for (size_t i = 0; i < Ram_size(ram); ++i)
-        {
-            if (d == D_HEX)
-            {
-                printf("%02x ", Ram_get(ram, i));
-                if (++x == 26)
-                {
-                    x = 0;
-                    puts("");
-                }
-            }
-            else
-            {
-                putchar(Ram_get(ram, i));
-            }
-        }
-        fflush(stdout);
+        if (d == D_HEX) dumpRamHex(ram);
+        else dumpRam(ram);
     }
 
+    if (converter)
+    {
+        puts("Converted input:");
+        dumpRamHex(Converter_input(converter));
+        puts("Converted output:");
+        dumpRamHex(Converter_output(converter));
+    }
+
+    if (convtable) fclose(convtable);
+    Converter_destroy(converter);
     Cpu_destroy(cpu);
     Ram_destroy(ram);
     return EXIT_SUCCESS;
 
+error:
+    if (convtable) fclose(convtable);
+    Converter_destroy(converter);
+    Cpu_destroy(cpu);
+    Ram_destroy(ram);
+    return EXIT_FAILURE;
+
 usage:
+    if (convtable) fclose(convtable);
     fprintf(stderr, "Usage: %s [-r] [-s startpc] [-h] [-t] [-c convfile] "
             "[-d] [-x]\n", argv[0]);
     return EXIT_FAILURE;

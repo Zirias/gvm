@@ -5,11 +5,13 @@
 
 #include "cpu.h"
 #include "ram.h"
+#include "converter.h"
 #include "opcode.h"
 
 struct Cpu
 {
     Ram *ram;
+    Converter *conv;
     CpuFlags flags;
     uint16_t pc;
     uint16_t sp;
@@ -17,11 +19,12 @@ struct Cpu
     uint8_t regs[3];
 };
 
-Cpu *Cpu_create(Ram *ram, uint16_t pc)
+Cpu *Cpu_create(Ram *ram, uint16_t pc, Converter *conv)
 {
     if (pc >= Ram_size(ram)) return 0;
     Cpu *self = malloc(sizeof *self);
     self->ram = ram;
+    self->conv = conv;
     self->pc = pc;
     self->flags = 0;
     self->sp = 0;
@@ -145,8 +148,9 @@ int Cpu_step(Cpu *self, char *dis)
 {
     if (dis) strcpy(dis, "                               ");
     int rc = 0;
-    uint8_t op = Ram_get(self->ram, self->pc++);
-    if (self->pc >= Ram_size(self->ram)) rc = -1;
+    uint8_t op = Ram_get(self->ram, self->pc);
+    if (self->conv) Converter_writeOpcode(self->conv, op, self->pc);
+    if (++self->pc >= Ram_size(self->ram)) rc = -1;
     logByte(dis, 0, op);
 
     if ((op & O_AM_IMPLICIT) == O_AM_IMPLICIT)
@@ -434,6 +438,8 @@ int Cpu_step(Cpu *self, char *dis)
             case O_STA:
                 logInst(dis, "STA");
                 Ram_set(self->ram, addr, self->regs[CR_A]);
+                if (self->conv) Converter_writeData(self->conv,
+                        self->regs[CR_A], addr);
                 break;
             case O_LDX:
                 logInst(dis, "LDX");
@@ -443,6 +449,8 @@ int Cpu_step(Cpu *self, char *dis)
             case O_STX:
                 logInst(dis, "STX");
                 Ram_set(self->ram, addr, self->regs[CR_X]);
+                if (self->conv) Converter_writeData(self->conv,
+                        self->regs[CR_X], addr);
                 break;
             case O_LDY:
                 logInst(dis, "LDY");
@@ -452,6 +460,8 @@ int Cpu_step(Cpu *self, char *dis)
             case O_STY:
                 logInst(dis, "STY");
                 Ram_set(self->ram, addr, self->regs[CR_Y]);
+                if (self->conv) Converter_writeData(self->conv,
+                        self->regs[CR_Y], addr);
                 break;
             case O_AND:
                 logInst(dis, "AND");
@@ -473,6 +483,7 @@ int Cpu_step(Cpu *self, char *dis)
                 SR(v);
                 NZ(v);
                 Ram_set(self->ram, addr, v);
+                if (self->conv) Converter_writeData(self->conv, v, addr);
                 logRes(dis, v);
                 break;
             case O_ASL:
@@ -480,6 +491,7 @@ int Cpu_step(Cpu *self, char *dis)
                 SL(v);
                 NZ(v);
                 Ram_set(self->ram, addr, v);
+                if (self->conv) Converter_writeData(self->conv, v, addr);
                 logRes(dis, v);
                 break;
             case O_ROR:
@@ -487,6 +499,7 @@ int Cpu_step(Cpu *self, char *dis)
                 RR(v);
                 NZ(v);
                 Ram_set(self->ram, addr, v);
+                if (self->conv) Converter_writeData(self->conv, v, addr);
                 logRes(dis, v);
                 break;
             case O_ROL:
@@ -494,6 +507,7 @@ int Cpu_step(Cpu *self, char *dis)
                 RL(v);
                 NZ(v);
                 Ram_set(self->ram, addr, v);
+                if (self->conv) Converter_writeData(self->conv, v, addr);
                 logRes(dis, v);
                 break;
             case O_ADC:
@@ -525,6 +539,7 @@ int Cpu_step(Cpu *self, char *dis)
                 ++v;
                 NZ(v);
                 Ram_set(self->ram, addr, v);
+                if (self->conv) Converter_writeData(self->conv, v, addr);
                 logRes(dis, v);
                 break;
             case O_DEC:
@@ -532,6 +547,7 @@ int Cpu_step(Cpu *self, char *dis)
                 --v;
                 NZ(v);
                 Ram_set(self->ram, addr, v);
+                if (self->conv) Converter_writeData(self->conv, v, addr);
                 logRes(dis, v);
                 break;
             case O_CMP:
