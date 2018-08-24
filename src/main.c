@@ -2,6 +2,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef BUILTIN_GETOPT
+#include "builtin_getopt.h"
+#else
+#include <unistd.h>
+#endif
+
 #include "ram.h"
 #include "cpu.h"
 
