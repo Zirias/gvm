@@ -36,6 +36,10 @@ typedef enum Opcode
     O_CMP           = 17 << 3,
     O_CPX           = 18 << 3,
     O_CPY           = 19 << 3,
+    O_WUD           = 20 << 3,
+    O_WSD           = 21 << 3,
+    O_WCH           = 22 << 3,
+    O_WTX           = 23 << 3,
 
     O_HLT           = 0xc0,
     O_RTS           = 0xc1,
@@ -67,6 +71,9 @@ typedef enum Opcode
     O_PLX           = 0xdb,
     O_PHY           = 0xdc,
     O_PLY           = 0xdd,
+    O_WNL           = 0xde,
+    O_WTB           = 0xdf,
+    O_WSP           = 0xe0,
 
     O_BSR           = 0x78 << 1,
     O_BRA           = 0x79 << 1,

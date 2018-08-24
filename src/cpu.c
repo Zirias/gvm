@@ -340,6 +340,51 @@ int Cpu_step(Cpu *self, char *dis)
                     self->regs[CR_X] = self->regs[CR_Y];
                     NZ(self->regs[CR_X]);
                     break;
+                case O_PHA:
+                    logInst(dis, "PHA");
+                    if (self->sp == 256) return -1;
+                    self->stack[self->sp++] = self->regs[CR_A];
+                    break;
+                case O_PLA:
+                    logInst(dis, "PLA");
+                    if (self->sp == 0) return -1;
+                    self->regs[CR_A] = self->stack[--self->sp];
+                    break;
+                case O_PHX:
+                    logInst(dis, "PHX");
+                    if (self->sp == 256) return -1;
+                    self->stack[self->sp++] = self->regs[CR_X];
+                    break;
+                case O_PLX:
+                    logInst(dis, "PLX");
+                    if (self->sp == 0) return -1;
+                    self->regs[CR_X] = self->stack[--self->sp];
+                    break;
+                case O_PHY:
+                    logInst(dis, "PHY");
+                    if (self->sp == 256) return -1;
+                    self->stack[self->sp++] = self->regs[CR_Y];
+                    break;
+                case O_PLY:
+                    logInst(dis, "PLY");
+                    if (self->sp == 0) return -1;
+                    self->regs[CR_Y] = self->stack[--self->sp];
+                    break;
+                case O_WNL:
+                    logInst(dis, "WNL");
+                    putchar('\n');
+                    fflush(stdout);
+                    break;
+                case O_WTB:
+                    logInst(dis, "WNL");
+                    putchar('\t');
+                    fflush(stdout);
+                    break;
+                case O_WSP:
+                    logInst(dis, "WNL");
+                    putchar(' ');
+                    fflush(stdout);
+                    break;
                 case O_HLT:
                     logInst(dis, "HLT");
                     return -1;
@@ -570,6 +615,26 @@ int Cpu_step(Cpu *self, char *dis)
                 if (v < self->regs[CR_Y]) self->flags |= CF_CARRY;
                 else self->flags &= ~CF_CARRY;
                 NZ(v);
+                break;
+            case O_WUD:
+                logInst(dis, "WUD");
+                printf("%u", v);
+                fflush(stdout);
+                break;
+            case O_WSD:
+                logInst(dis, "WSD");
+                printf("%d", (int8_t)v);
+                fflush(stdout);
+                break;
+            case O_WCH:
+                logInst(dis, "WCH");
+                putchar(v);
+                fflush(stdout);
+                break;
+            case O_WTX:
+                logInst(dis, "WTX");
+                fputs((char *)Ram_contents(self->ram) + addr, stdout);
+                fflush(stdout);
                 break;
             default:
                 logInst(dis, "ILL");
