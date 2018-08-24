@@ -50,7 +50,7 @@ static void dumpRam(const Ram *ram)
     fflush(stdout);
 }
 
-static Ram *createXcode(int hex, uint16_t load)
+static Ram *createXcode(FILE *prg, int hex, uint16_t load)
 {
     Ram *ram = Ram_create(0x10000, 0);
     if (!ram) return 0;
@@ -69,7 +69,7 @@ static Ram *createXcode(int hex, uint16_t load)
         unsigned val;
         int rc;
 
-        while ((rc = scanf("%x", &val)) > 0)
+        while ((rc = fscanf(prg, "%x", &val)) > 0)
         {
             if (val > 0xff)
             {
@@ -91,11 +91,11 @@ static Ram *createXcode(int hex, uint16_t load)
     else
     {
         size_t szr;
-        while ((szr = fread(buf + sz, 1, 0x10000 - load - sz, stdin)))
+        while ((szr = fread(buf + sz, 1, 0x10000 - load - sz, prg)))
         {
             sz += szr;
         }
-        if (!feof(stdin))
+        if (!feof(prg))
         {
             fputs("unknown loading error\n", stderr);
             Ram_destroy(ram);
@@ -116,7 +116,7 @@ static Ram *createXcode(int hex, uint16_t load)
     return ram;
 }
 
-static Ram *createXram(int hex)
+static Ram *createXram(FILE *prg, int hex)
 {
     Ram *ram = Ram_create(0,0);
     if (!ram) return 0;
@@ -125,7 +125,7 @@ static Ram *createXram(int hex)
     {
         unsigned val;
         int rc;
-        while ((rc = scanf("%x", &val)) > 0)
+        while ((rc = fscanf(prg, "%x", &val)) > 0)
         {
             if (val > 0xff)
             {
@@ -151,7 +151,7 @@ static Ram *createXram(int hex)
     {
         uint8_t buf[0x1000];
         size_t sz;
-        while ((sz = fread(buf, 1, 0x1000, stdin)))
+        while ((sz = fread(buf, 1, 0x1000, prg)))
         {
             if (Ram_append(ram, buf, sz) < 0)
             {
@@ -160,7 +160,7 @@ static Ram *createXram(int hex)
                 return 0;
             }
         }
-        if (!feof(stdin))
+        if (!feof(prg))
         {
             fputs("unknown loading error\n", stderr);
             Ram_destroy(ram);
@@ -185,6 +185,8 @@ int main(int argc, char **argv)
     Ram *ram = 0;
     Converter *converter = 0;
     Cpu *cpu = 0;
+
+    setvbuf(stdin, 0, _IONBF, 0);
 
     if (!argv[0]) argv[0] = "gvm";
     while ((opt = getopt(argc, argv, "rs:htc:dx")) != -1)
@@ -224,16 +226,24 @@ int main(int argc, char **argv)
                 goto usage;
         }
     }
-    if (optind < argc) goto usage;
+    if (optind == argc || optind < argc-1) goto usage;
+
+    FILE *prg = fopen(argv[optind], "r");
+    if (!prg)
+    {
+        fprintf(stderr, "Error opening %s for reading.\n", argv[optind]);
+        goto error;
+    }
 
     if (m == M_XRAM)
     {
-        ram = createXram(hex);
+        ram = createXram(prg, hex);
     }
     else
     {
-        ram = createXcode(hex, start);
+        ram = createXcode(prg, hex, start);
     }
+    fclose(prg);
     if (!ram) goto error;
 
     if (convtable)
@@ -307,6 +317,6 @@ error:
 usage:
     if (convtable) fclose(convtable);
     fprintf(stderr, "Usage: %s [-r] [-s startpc] [-h] [-t] [-c convfile] "
-            "[-d] [-x]\n", argv[0]);
+            "[-d] [-x] <program>\n", argv[0]);
     return EXIT_FAILURE;
 }

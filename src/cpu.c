@@ -226,6 +226,10 @@ int Cpu_step(Cpu *self, char *dis)
         }
         else
         {
+            uint8_t buf[1024];
+            size_t len;
+            unsigned u;
+            int s;
             switch (op)
             {
                 case O_RTS:
@@ -384,6 +388,45 @@ int Cpu_step(Cpu *self, char *dis)
                     logInst(dis, "WNL");
                     putchar(' ');
                     fflush(stdout);
+                    break;
+                case O_RUD:
+                    logInst(dis, "RUD");
+                    fgets((char *)buf, 1024, stdin);
+                    u = 0U;
+                    if (sscanf((char *)buf, "%u", &u) < 0) return -1;
+                    self->regs[CR_A] = u;
+                    logRes(dis, self->regs[CR_A]);
+                    break;
+                case O_RSD:
+                    logInst(dis, "RSD");
+                    fgets((char *)buf, 1024, stdin);
+                    s = 0;
+                    if (sscanf((char *)buf, "%d", &s) < 0) return -1;
+                    self->regs[CR_A] = (int8_t)s;
+                    logRes(dis, self->regs[CR_A]);
+                    break;
+                case O_RCH:
+                    logInst(dis, "RCH");
+                    s = getchar();
+                    if (s < 0) return -1;
+                    self->regs[CR_A] = s;
+                    logRes(dis, self->regs[CR_A]);
+                    break;
+                case O_RTX:
+                    u = Ram_get(self->ram, self->pc++);
+                    logByte(dis, 3, u);
+                    if (self->pc >= Ram_size(self->ram)) return -1;
+                    logAbs(dis, u<<8, 0);
+                    logInst(dis, "RTX");
+                    fgets((char *)buf, 1024, stdin);
+                    buf[strcspn((char *)buf, "\n")] = 0;
+                    len = strlen((char *)buf)+1;
+                    if (len > 256)
+                    {
+                        len = 256;
+                        buf[255] = 0;
+                    }
+                    if (Ram_load(self->ram, u<<8, buf, len) < 0) return -1;
                     break;
                 case O_HLT:
                     logInst(dis, "HLT");

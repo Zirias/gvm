@@ -74,6 +74,10 @@ typedef enum Opcode
     O_WNL           = 0xde,
     O_WTB           = 0xdf,
     O_WSP           = 0xe0,
+    O_RUD           = 0xe1,
+    O_RSD           = 0xe2,
+    O_RCH           = 0xe3,
+    O_RTX           = 0xe4,
 
     O_BSR           = 0x78 << 1,
     O_BRA           = 0x79 << 1,
