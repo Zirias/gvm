@@ -90,4 +90,9 @@ typedef enum Opcode
 
 } Opcode;
 
+#define ILL_INST -1
+#define ILL_AM -2
+
+int Opcode_fromString(Opcode *oc, const char *str, Opcode am);
+
 #endif
