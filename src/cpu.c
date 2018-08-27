@@ -22,12 +22,11 @@ struct Cpu
 Cpu *Cpu_create(Ram *ram, uint16_t pc, Converter *conv)
 {
     if (pc >= Ram_size(ram)) return 0;
-    Cpu *self = malloc(sizeof *self);
+    Cpu *self = calloc(1, sizeof *self);
+    if (!self) return 0;
     self->ram = ram;
     self->conv = conv;
     self->pc = pc;
-    self->flags = 0;
-    self->sp = 0;
     return self;
 }
 
