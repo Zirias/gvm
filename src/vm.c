@@ -228,7 +228,7 @@ int vmmain(int argc, char **argv)
     }
     if (optind == argc || optind < argc-1) goto usage;
 
-    FILE *prg = fopen(argv[optind], "r");
+    FILE *prg = fopen(argv[optind], hex?"r":"rb");
     if (!prg)
     {
         fprintf(stderr, "Error opening %s for reading.\n", argv[optind]);
