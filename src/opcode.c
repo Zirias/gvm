@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include "opcode.h"
 
@@ -82,15 +83,31 @@ static const char *branch[] =
     "BCS"
 };
 
+static void uc(char *upper, size_t n, const char *str)
+{
+    if (!n) return;
+    const unsigned char *c = (const unsigned char *)str;
+    for (size_t i = 0; *c && i < n-1; ++i, ++c)
+    {
+        *upper++ = toupper(*c);
+    }
+    *upper = 0;
+}
+
 int Opcode_fromString(Opcode *oc, const char *str, Opcode am)
 {
+    if (strlen(str) != 3) return ILL_INST;
+
+    char opstr[4];
+    uc(opstr, 4, str);
+
     int found = 0;
     uint8_t i;
-    if (*str == 'b' || *str == 'B')
+    if (*opstr == 'B')
     {
 	for (i = 0; i < sizeof branch / sizeof *branch; ++i)
 	{
-	    if (!strcasecmp(str, branch[i]))
+	    if (!strcmp(opstr, branch[i]))
 	    {
 		found = 1;
 		break;
@@ -103,7 +120,7 @@ int Opcode_fromString(Opcode *oc, const char *str, Opcode am)
     }
     for (i = 0; i < sizeof multimode / sizeof *multimode; ++i)
     {
-	if (!strcasecmp(str, multimode[i]))
+	if (!strcmp(opstr, multimode[i]))
 	{
 	    found = 1;
 	    break;
@@ -117,7 +134,7 @@ int Opcode_fromString(Opcode *oc, const char *str, Opcode am)
     }
     for (i = 0; i < sizeof implicit / sizeof *implicit; ++i)
     {
-	if (!strcasecmp(str, implicit[i]))
+	if (!strcmp(opstr, implicit[i]))
 	{
 	    found = 1;
 	    break;
